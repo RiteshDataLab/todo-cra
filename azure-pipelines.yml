@@ -1,0 +1,43 @@
+trigger:
+  - main  # Runs pipeline when code is pushed to 'main' branch
+
+pool:
+  vmImage: 'ubuntu-latest'  # Use a Microsoft-hosted Linux agent
+
+stages:
+- stage: Build
+  jobs:
+  - job: BuildReactApp
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '16.x'
+      displayName: 'Install Node.js'
+
+    - script: |
+        npm install
+        npm run build
+      displayName: 'Build React App'
+
+    - task: CopyFiles@2
+      inputs:
+        SourceFolder: '$(Build.SourcesDirectory)/build'
+        Contents: '**'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+      displayName: 'Copy Build Files'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: 'react-build'
+      displayName: 'Publish Build Artifacts'
+
+- stage: Deploy
+  jobs:
+  - job: DeployToGCP
+    steps:
+    - script: |
+        echo "Deploying to GCP..."
+        scp -o StrictHostKeyChecking=no -r $(Pipeline.Workspace)/react-build/* ritesh@34.170.145.142:/var/www/react-app
+        ssh -o StrictHostKeyChecking=no <gcp-user>@<gcp-instance-ip> "cd /var/www/react-app && nohup npx serve -s . -l 3000 &"
+      displayName: 'Copy and Deploy to GCP'
